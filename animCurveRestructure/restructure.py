@@ -212,9 +212,36 @@ def PopulateTool(t):
     w = FBAddRegionParam(-15,FBAttachType.kFBAttachRight,"")
     # the DoIt button's height
     h = FBAddRegionParam(-10,FBAttachType.kFBAttachBottom,"")
-     
+    
+    
     t.AddRegion("DoIt","DoIt", x, y, w, h)
- 
+    lyt = FBVBoxLayout()
+    t.SetControl("DoIt",lyt)
+    
+
+    b = FBButton()
+    b.Caption = "Offset"
+    b.Justify = FBTextJustify.kFBTextJustifyCenter
+    lyt.AddRelative(b,60)
+    #b.OnClick.Add(BtnCallback)
+
+    b = FBButton()
+    b.Caption = "Closest Apex"
+    b.Justify = FBTextJustify.kFBTextJustifyCenter
+    lyt.AddRelative(b,60)
+    #b.OnClick.Add(BtnCallback)  
+    
+    b = FBButton()
+    b.Caption = "Whole Selection"
+    b.Justify = FBTextJustify.kFBTextJustifyCenter
+    lyt.AddRelative(b,60)
+    
+    b = FBButton()
+    b.Caption = "Sadashige"
+    b.Justify = FBTextJustify.kFBTextJustifyCenter
+    lyt.AddRelative(b,60)
+
+    """
     t.SetControl("DoIt", DoIt)
     DoIt.Visible = True
     DoIt.ReadOnly = False
@@ -231,6 +258,7 @@ def PopulateTool(t):
     DoIt.Look = FBButtonLook.kFBLookNormal
     # this tells the button "when you are clicked go to def BtnCallbackDoIt"
     DoIt.OnClick.Add(BtnCallbackDoIt)
+    """
      
 def CreateTool():
     # the tool window's name

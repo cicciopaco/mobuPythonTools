@@ -141,6 +141,13 @@ def offsetDeviation(FCurveKeyList, sortedSelectedKeysID_list, deviationDelta, no
         FCurveKeyList[key].Value += deviationDelta
     
 
+def refineSelection():
+    """
+    Analyzes selection and cuts out every frame selected before the anomaly
+    :return:
+    """
+
+
 
 def runTool():
     try:
@@ -195,13 +202,115 @@ def runTool():
 def BtnCallbackDoIt(control, event):
     runTool()
     print "do it!"
- 
+
+def offsetSelection():
+    pass
+
+def closestApex():
+    pass
+
+def wholeSelection():
+    pass
+
+def hishan():
+    pass
+
+
+def extractSlope(fCurve, onSelecction=False):
+    """
+    return a list containig the slope values of each copy of keyframe contained in the
+    provided FBFcurve
+    :param fCurve: FBFCurve
+    :return:
+    """
+
+    keysList = fCurve.Keys
+    if len(keysList) < 2 : return None
+
+    fTimeMode = FBPlayerControl().GetTransportFps()
+    slopeList = []
+    keyID = 0
+    while keyID < len(keysList) - 1:
+
+        slopeList.append((keysList[keyID+1].Value - keysList[keyID].Value) / (keysList[keyID+1].Time.GetFrame(fTimeMode) - keysList[keyID].Time.GetFrame(fTimeMode)))
+        keyID += 1
+
+    return slopeList
+
+
+def extractSpikes(fCurve, deviationFactor = 1.0, onSelection=False):
+    """
+    Returns a list containing the ID of the keyframe of the given FBFcurve
+    that represent a deviation from the animation curve trend defined by the average
+    of the slope variation between pair of contiguous keyframes multiplied by tbe
+    specified deviation factor.
+    For convenience add the id of the last frame to the end of the list so to facilitate
+    the definition of the anomaly intervals
+
+    Parameters:
+        FBFcurve fCurve
+        int deviationFactor: factor used to multiply the de average slope variation of the curve
+
+    Return
+        list of int (keyframes id that exceed the deviation threshold)
+
+
+    """
+
+    slopesCollection = extractSlope(fCurve)
+
+    if not slopesCollection : return []
+
+    fTimeMode = FBPlayerControl().GetTransportFps()
+    spikes = []
+    deviationThreshold = 0.0
+    for slope in slopesCollection:
+        deviationThreshold += abs(slope)
+    deviationThreshold /= len(slopesCollection)
+    deviationThreshold *= deviationFactor
+
+    print deviationThreshold
+
+    for i, slope in enumerate(slopesCollection):
+        if abs(slope) > deviationThreshold : spikes.append(fCurve.Keys[i].Time.GetFrame()+1)
+
+    spikes.append(fCurve.Keys[len(fCurve.Keys) - 1].Time.GetFrame(fTimeMode))
+
+    return spikes
+
+def groupAnomalies(spikesList):
+    """
+    Analyzes the spikes list and defines the intervals of keyframes to correct
+    Parameters:
+        list spikesList
+
+    Return:
+        list of tuples of int: [(anomalyBegin, anomalyEnd), ...]
+
+    """
+
+    i = 0
+    n = 2
+
+    anomaliesGroups = []
+
+    while i < len(spikesList)/2:
+
+        anomaliesGroups.append((spikesList[n*i], spikesList[(n*i)+1]))
+        i += 1
+
+    return anomaliesGroups
+
+
  
 # Start of the tool window lay out
 def PopulateTool(t):
     #populate regions here
- 
+
 # Layout for the Button
+
+
+    ### Add extra float entry to define anomaly threshhold
 
     DoIt = FBButton()
     # the DoIt button's position on the x
@@ -223,23 +332,25 @@ def PopulateTool(t):
     b.Caption = "Offset"
     b.Justify = FBTextJustify.kFBTextJustifyCenter
     lyt.AddRelative(b,60)
-    #b.OnClick.Add(BtnCallback)
+    #b.OnClick.Add(offsetSelection)
 
     b = FBButton()
     b.Caption = "Closest Apex"
     b.Justify = FBTextJustify.kFBTextJustifyCenter
     lyt.AddRelative(b,60)
-    #b.OnClick.Add(BtnCallback)  
+    #b.OnClick.Add(closestApex)
     
     b = FBButton()
     b.Caption = "Whole Selection"
     b.Justify = FBTextJustify.kFBTextJustifyCenter
     lyt.AddRelative(b,60)
+    #b.OnClick.Add(wholeSelection)
     
     b = FBButton()
-    b.Caption = "Sadashige"
+    b.Caption = "hishan"
     b.Justify = FBTextJustify.kFBTextJustifyCenter
     lyt.AddRelative(b,60)
+    #b.OnClick(hishan)
 
     """
     t.SetControl("DoIt", DoIt)

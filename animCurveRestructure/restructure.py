@@ -1,3 +1,6 @@
+import uuid
+
+
 from pyfbsdk import *
 from pyfbsdk_additions import *
 
@@ -27,7 +30,7 @@ def getCorrectionLimit(selectedKeyFrameDict, isPositiveDeviated):
     """
     returns the index of the frame where to stop the curve correction.
     
-    In case the deviation is EGATIVE the correction will stop at the frame before the deviation start a positive trend
+    In case the deviation is NEGATIVE the correction will stop at the frame before the deviation start a positive trend
     In case the deviation is POSITIVE the correction will stop at the frame before the deviation starts a negative trend 
     
     Parameters:
@@ -41,7 +44,6 @@ def getCorrectionLimit(selectedKeyFrameDict, isPositiveDeviated):
     if not selectedKeyFrameDict: return None
     
     sortedKeyIDList = sorted(selectedKeyFrameDict)
-    print sortedKeyIDList
     refValue = selectedKeyFrameDict[sortedKeyIDList[0]]
     
     if len(selectedKeyFrameDict) < 2: return sortedKeyIDList[0]
@@ -139,81 +141,6 @@ def offsetDeviation(FCurveKeyList, sortedSelectedKeysID_list, deviationDelta, no
                 
     for key in sortedSelectedKeysID_list:
         FCurveKeyList[key].Value += deviationDelta
-    
-
-def refineSelection():
-    """
-    Analyzes selection and cuts out every frame selected before the anomaly
-    :return:
-    """
-
-
-
-def runTool():
-    try:
-        del undoManager
-    except:
-        pass
-        
-    selectedCtrls = FBModelList()
-    FBGetSelectedModels(selectedCtrls, None, True, True)
-    
-    animationChannels = ["Translation", "Rotation"]
-    
-       
-    for control in selectedCtrls:
-    
-        for channel in animationChannels:
-            exec "animationNodes = control.{0}.GetAnimationNode().Nodes".format(channel)
-            for axis in range(3):
-                animation_FCurveKeyList = animationNodes[axis].FCurve.Keys
-                selectedKeyFrame_dict = getSelectedKeyFrameDict(animation_FCurveKeyList)
-                if len(selectedKeyFrame_dict) < 2: continue
-                
-                sortedSelectedKeysID_list = sorted(selectedKeyFrame_dict) 
-                
-                ## evaluate deviation sign
-                firstFrameID = sortedSelectedKeysID_list[0]
-                predeviationFrameID = firstFrameID - 1
-                
-                ## figure out deviation of the curve
-                positiveDeviation = True if animation_FCurveKeyList[firstFrameID].Value > animation_FCurveKeyList[predeviationFrameID].Value else False
-         
-                ## figure out correction point
-                correctionStopFrame = getCorrectionLimit(selectedKeyFrame_dict, positiveDeviation)
-                
-                ## sift dictionary of the selected frames up to the correctionStopFrame
-                for i in range(correctionStopFrame + 1, sortedSelectedKeysID_list[-1] + 1):
-                    selectedKeyFrame_dict.pop(i)
-    
-                ## calculate deviation
-                deltaDeviation =  getBeginDeviationDelta(animation_FCurveKeyList, sortedSelectedKeysID_list[0])
-                
-                ## normalize the selection
-                normalizedDeviation_dict = normalizeDeviation(selectedKeyFrame_dict, sortedSelectedKeysID_list[0])
-                
-                ## perform offset
-                offsetDeviation(animation_FCurveKeyList, selectedKeyFrame_dict, deltaDeviation, normalizedDeviation_dict)
-   
-
-
- 
-# Define what the "DoIt" button does when clicked
-def BtnCallbackDoIt(control, event):
-    runTool()
-    print "do it!"
-
-def offsetSelection():
-    pass
-
-def closestApex():
-    pass
-
-def wholeSelection():
-    pass
-
-def hishan():
-    pass
 
 
 def extractSlope(fCurve, onSelecction=False):
@@ -246,18 +173,14 @@ def extractSpikes(fCurve, deviationFactor = 1.0, onSelection=False):
     specified deviation factor.
     For convenience add the id of the last frame to the end of the list so to facilitate
     the definition of the anomaly intervals
-
     Parameters:
         FBFcurve fCurve
         int deviationFactor: factor used to multiply the de average slope variation of the curve
-
     Return
         list of int (keyframes id that exceed the deviation threshold)
-
-
     """
 
-    slopesCollection = extractSlope(fCurve)
+    slopesCollection = extractSlope(fCurve, onSelection)
 
     if not slopesCollection : return []
 
@@ -269,7 +192,6 @@ def extractSpikes(fCurve, deviationFactor = 1.0, onSelection=False):
     deviationThreshold /= len(slopesCollection)
     deviationThreshold *= deviationFactor
 
-    print deviationThreshold
 
     for i, slope in enumerate(slopesCollection):
         if abs(slope) > deviationThreshold : spikes.append(fCurve.Keys[i].Time.GetFrame()+1)
@@ -283,36 +205,136 @@ def groupAnomalies(spikesList):
     Analyzes the spikes list and defines the intervals of keyframes to correct
     Parameters:
         list spikesList
-
     Return:
         list of tuples of int: [(anomalyBegin, anomalyEnd), ...]
-
     """
 
     i = 0
     n = 2
-
     anomaliesGroups = []
-
     while i < len(spikesList)/2:
-
         anomaliesGroups.append((spikesList[n*i], spikesList[(n*i)+1]))
         i += 1
 
     return anomaliesGroups
 
 
+
+def runTool(mode = 0):
+    try:
+        del undoManager
+    except:
+        pass
+        
+    selectedCtrls = FBModelList()
+    FBGetSelectedModels(selectedCtrls, None, True, True)
+    
+    animationChannels = ["Translation", "Rotation"]
+
+    undoManager = FBUndoManager()
+
+    undoManager.TransactionBegin(str(uuid.uuid1()))
+
+
+    for control in selectedCtrls:
+
+        undoManager.TransactionAddModelTRS(control)
+    
+        for channel in animationChannels:
+            exec "animationNodes = control.{0}.GetAnimationNode().Nodes".format(channel)
+            for axis in range(3):
+                animation_FCurveKeyList = animationNodes[axis].FCurve.Keys
+                selectedKeyFrame_dict = getSelectedKeyFrameDict(animation_FCurveKeyList)
+                if len(selectedKeyFrame_dict) < 2: continue
+                
+                sortedSelectedKeysID_list = sorted(selectedKeyFrame_dict) 
+
+                if mode == 1:
+
+                    ## evaluate deviation sign
+                    firstFrameID = sortedSelectedKeysID_list[0]
+                    predeviationFrameID = firstFrameID - 1
+
+                    isDeviationPositive = True if animation_FCurveKeyList[firstFrameID].Value > animation_FCurveKeyList[predeviationFrameID].Value else False
+
+                    ## figure out correction point
+                    correctionStopFrame = getCorrectionLimit(selectedKeyFrame_dict, isDeviationPositive)
+
+                    ## sift dictionary of the selected frames up to the correctionStopFrame
+                    for i in range(correctionStopFrame + 1, sortedSelectedKeysID_list[-1] + 1):
+                        selectedKeyFrame_dict.pop(i)
+
+
+                ## calculate deviation
+                deltaDeviation =  getBeginDeviationDelta(animation_FCurveKeyList, sortedSelectedKeysID_list[0])
+
+
+
+                if mode == 1 or mode == 2:
+
+                    ## normalize the selection
+                    normalizedDeviation_dict = normalizeDeviation(selectedKeyFrame_dict, sortedSelectedKeysID_list[0])
+
+                    ## perform offset
+                    offsetDeviation(animation_FCurveKeyList, selectedKeyFrame_dict, deltaDeviation, normalizedDeviation_dict)
+
+                elif mode == 0:
+                    offsetDeviation(animation_FCurveKeyList, selectedKeyFrame_dict, deltaDeviation)
+
+
+                elif mode == 3:
+
+                    ## get coordinates of the selection
+                    x_gappedL = sortedSelectedKeysID_list[0]
+                    x_gappedR = sortedSelectedKeysID_list[-1]
+
+                    y_gappedL = selectedKeyFrame_dict[x_gappedL]
+                    y_gappedR = selectedKeyFrame_dict[x_gappedR]
+
+                    print x_gappedL, y_gappedL
+                    print x_gappedR, y_gappedR
+
+                    ## get pre and post deviation values
+                    ## NOTICE: provide a system to avoid to go beyond the last keyframe
+                    x_preDeviation = x_gappedL - 1
+                    y_preDeviation = animation_FCurveKeyList[x_preDeviation].Value
+
+                    x_postDeviation = x_gappedR + 1
+                    y_postDeviation = animation_FCurveKeyList[x_postDeviation].Value
+
+
+                    print x_preDeviation, y_preDeviation
+                    print x_postDeviation, y_postDeviation
+
+                    preSlope = extractSlope(animationNodes[axis].FCurve)[x_preDeviation - 1]
+                    postSlope = extractSlope(animationNodes[axis].FCurve)[x_postDeviation]
+
+                    print preSlope, postSlope
+
+                    # y_expectedL =
+                    # pre_m = (animation_FCurveKeyList[-1].Value - animation_FCurveKeyList[-2].Value) / (animation_FCurveKeyList[-1].Time - animation_FCurveKeyList[-2].Time)
+                    # post_m =
+
+
+
+
+                    ## calculalte delta of the first frame
+
+                    ##
+
+
+    undoManager.TransactionEnd()
+
+ 
+
+ 
  
 # Start of the tool window lay out
 def PopulateTool(t):
     #populate regions here
-
+ 
 # Layout for the Button
 
-
-    ### Add extra float entry to define anomaly threshhold
-
-    DoIt = FBButton()
     # the DoIt button's position on the x
     x = FBAddRegionParam(15,FBAttachType.kFBAttachLeft,"")
     # the DoIt button's position on the y
@@ -328,49 +350,44 @@ def PopulateTool(t):
     t.SetControl("DoIt",lyt)
     
 
-    b = FBButton()
-    b.Caption = "Offset"
-    b.Justify = FBTextJustify.kFBTextJustifyCenter
-    lyt.AddRelative(b,60)
-    #b.OnClick.Add(offsetSelection)
+    offsetBtn = FBButton()
+    offsetBtn.Caption = "Offset"
+    offsetBtn.Justify = FBTextJustify.kFBTextJustifyCenter
+    lyt.AddRelative(offsetBtn,60)
+    offsetBtn.OnClick.Add(offsetCB)
 
-    b = FBButton()
-    b.Caption = "Closest Apex"
-    b.Justify = FBTextJustify.kFBTextJustifyCenter
-    lyt.AddRelative(b,60)
-    #b.OnClick.Add(closestApex)
+    closetApexBtn = FBButton()
+    closetApexBtn.Caption = "Closest Apex"
+    closetApexBtn.Justify = FBTextJustify.kFBTextJustifyCenter
+    lyt.AddRelative(closetApexBtn,60)
+    closetApexBtn.OnClick.Add(closetApexCB)
     
-    b = FBButton()
-    b.Caption = "Whole Selection"
-    b.Justify = FBTextJustify.kFBTextJustifyCenter
-    lyt.AddRelative(b,60)
-    #b.OnClick.Add(wholeSelection)
+    wholeSelectionBtn = FBButton()
+    wholeSelectionBtn.Caption = "Whole Selection"
+    wholeSelectionBtn.Justify = FBTextJustify.kFBTextJustifyCenter
+    lyt.AddRelative(wholeSelectionBtn,60)
+    wholeSelectionBtn.OnClick.Add(wholeSelectionCB)
     
-    b = FBButton()
-    b.Caption = "hishan"
-    b.Justify = FBTextJustify.kFBTextJustifyCenter
-    lyt.AddRelative(b,60)
-    #b.OnClick(hishan)
+    ishanBtn = FBButton()
+    ishanBtn.Caption = "ishan method"
+    ishanBtn.Justify = FBTextJustify.kFBTextJustifyCenter
+    lyt.AddRelative(ishanBtn,60)
+    ishanBtn.OnClick.Add(ishanCB)
 
-    """
-    t.SetControl("DoIt", DoIt)
-    DoIt.Visible = True
-    DoIt.ReadOnly = False
-    DoIt.Enabled = True
-    # hover over the button and this msg. will apear
-    DoIt.Hint = "launches what ever script you are testing - NOT FOR PRODUCTION"
-    # the text that will appear on the button
-    DoIt.Caption = "Fix Curve"
-    DoIt.State = 0
-    # the button style - read up on this, there are lots of functions to be had
-    DoIt.Style = FBButtonStyle.kFBPushButton
-    # the button's text will be centered
-    DoIt.Justify = FBTextJustify.kFBTextJustifyCenter
-    DoIt.Look = FBButtonLook.kFBLookNormal
-    # this tells the button "when you are clicked go to def BtnCallbackDoIt"
-    DoIt.OnClick.Add(BtnCallbackDoIt)
-    """
-     
+
+def offsetCB(*args,**kwargs):
+    runTool(0)
+
+def closetApexCB(*args,**kwargs):
+    runTool(1)
+
+def wholeSelectionCB(*args,**kwargs):
+    runTool(2)
+
+def ishanCB(*args,**kwargs):
+    runTool(3)
+
+
 def CreateTool():
     # the tool window's name
     try:
@@ -381,7 +398,7 @@ def CreateTool():
     # the tool window's width
     t.StartSizeX = 200
     # the tool window's height
-    t.StartSizeY = 120
+    t.StartSizeY = 350
     PopulateTool(t)
     ShowTool(t)
     

@@ -288,6 +288,8 @@ def runTool(mode = 0):
                     x_gappedL = sortedSelectedKeysID_list[0]
                     x_gappedR = sortedSelectedKeysID_list[-1]
 
+                    x_delta = x_gappedR - x_gappedL
+
                     y_gappedL = selectedKeyFrame_dict[x_gappedL]
                     y_gappedR = selectedKeyFrame_dict[x_gappedR]
 
@@ -310,6 +312,29 @@ def runTool(mode = 0):
                     postSlope = extractSlope(animationNodes[axis].FCurve)[x_postDeviation]
 
                     print preSlope, postSlope
+
+                    preIntercept = y_preDeviation / (preSlope * x_preDeviation)
+                    postIntercept = y_postDeviation / (postSlope * x_postDeviation)
+
+                    y_expectedL = (x_gappedL * preSlope) + preIntercept
+                    y_expectedR = (x_gappedR * postSlope) + postIntercept
+
+                    y_deltaL = y_gappedL - y_expectedL
+                    y_deltaR = y_gappedR - y_expectedR
+
+                    for key in sortedSelectedKeysID_list:
+                        preFactor = float((key - x_gappedL) - x_delta) / float(0-x_delta)
+                        postFactor  = float((key - x_gappedL) - 0) / float(x_delta-0)
+
+                        print preFactor, postFactor
+
+                        animation_FCurveKeyList[key].Value += (y_deltaL * preFactor) - (y_deltaR * postFactor)
+
+
+
+
+                    weightedCorrection = {}
+
 
                     # y_expectedL =
                     # pre_m = (animation_FCurveKeyList[-1].Value - animation_FCurveKeyList[-2].Value) / (animation_FCurveKeyList[-1].Time - animation_FCurveKeyList[-2].Time)

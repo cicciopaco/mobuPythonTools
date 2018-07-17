@@ -266,7 +266,7 @@ def runTool(mode = 0):
 
 
                 ## calculate deviation
-                deltaDeviation =  getBeginDeviationDelta(animation_FCurveKeyList, sortedSelectedKeysID_list[0])
+                deltaDeviation = getBeginDeviationDelta(animation_FCurveKeyList, sortedSelectedKeysID_list[0])
 
 
 
@@ -308,44 +308,32 @@ def runTool(mode = 0):
                     print x_preDeviation, y_preDeviation
                     print x_postDeviation, y_postDeviation
 
-                    preSlope = extractSlope(animationNodes[axis].FCurve)[x_preDeviation - 1]
-                    postSlope = extractSlope(animationNodes[axis].FCurve)[x_postDeviation]
+                    preSlope = extractSlope(animationNodes[axis].FCurve)[x_preDeviation-1]
+                    postSlope = extractSlope(animationNodes[axis].FCurve)[x_postDeviation+1]
 
                     print preSlope, postSlope
 
-                    preIntercept = y_preDeviation / (preSlope * x_preDeviation)
-                    postIntercept = y_postDeviation / (postSlope * x_postDeviation)
+                    preIntercept = y_preDeviation - (preSlope * x_preDeviation)
+                    postIntercept = y_postDeviation - (postSlope * x_postDeviation)
+                    print preIntercept, postIntercept
 
                     y_expectedL = (x_gappedL * preSlope) + preIntercept
                     y_expectedR = (x_gappedR * postSlope) + postIntercept
+                    print y_expectedL, y_expectedR
 
                     y_deltaL = y_gappedL - y_expectedL
                     y_deltaR = y_gappedR - y_expectedR
 
                     for key in sortedSelectedKeysID_list:
                         preFactor = float((key - x_gappedL) - x_delta) / float(0-x_delta)
-                        postFactor  = float((key - x_gappedL) - 0) / float(x_delta-0)
-
+                        postFactor = float((key - x_gappedL) - 0) / float(x_delta-0)
+                        print "\nFACTOR CALCULATION"
                         print preFactor, postFactor
 
-                        animation_FCurveKeyList[key].Value += (y_deltaL * preFactor) - (y_deltaR * postFactor)
+                        animation_FCurveKeyList[key].Value -= (y_deltaL * preFactor) + (y_deltaR * postFactor)
 
+                    print "\nEND ISHAN METHOD\n"
 
-
-
-                    weightedCorrection = {}
-
-
-                    # y_expectedL =
-                    # pre_m = (animation_FCurveKeyList[-1].Value - animation_FCurveKeyList[-2].Value) / (animation_FCurveKeyList[-1].Time - animation_FCurveKeyList[-2].Time)
-                    # post_m =
-
-
-
-
-                    ## calculalte delta of the first frame
-
-                    ##
 
 
     undoManager.TransactionEnd()

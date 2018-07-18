@@ -65,6 +65,28 @@ def getCorrectionLimit(selectedKeyFrameDict, isPositiveDeviated):
     
     return sortedKeyIDList[-1]
 
+
+def getCorrectionLimit2(selectionSlopesList):
+
+
+    isTrendPositive = True if selectionSlopesList[0] >= 0.0 else False
+    frameLimit = 0
+
+    if isTrendPositive:
+        for i in range(1, len(selectionSlopesList)-1):
+            if selectionSlopesList[i] < 0.0: return frameLimit
+            else: frameLimit = i
+
+    else:
+        for i in range(1, len(selectionSlopesList)-1):
+            print frameLimit
+            if selectionSlopesList[i] > 0.0: return frameLimit
+            else: frameLimit = i
+
+    return frameLimit
+
+
+
     
 def getBeginDeviationDelta(FCurveKeyList, keyReferenceID):
     """
@@ -108,9 +130,13 @@ def normalizeDeviation(selectedFrames_dict, referenceFrameID):
     Return:
         dict
     """
-    
+    print selectedFrames_dict
+
     selectionMinVal = sorted(selectedFrames_dict.values())[0]
     selectionMaxVal = sorted(selectedFrames_dict.values())[-1]
+
+    print selectionMinVal, selectionMaxVal
+
     selectionAverage = 0
     for value in selectedFrames_dict.values():
         selectionAverage += value
@@ -122,6 +148,8 @@ def normalizeDeviation(selectedFrames_dict, referenceFrameID):
     # establish normalization in function of the reference frame (first frame)
     selectionMinVal = selectionMinVal if referenceFrameValue >= selectionAverage else selectionMaxVal
     selectionMaxVal = referenceFrameValue
+
+    print selectionMinVal, selectionMaxVal
     
     
     selectedFramesNormValue_dict = {}
@@ -258,7 +286,13 @@ def runTool(mode = 0):
                     isDeviationPositive = True if animation_FCurveKeyList[firstFrameID].Value > animation_FCurveKeyList[predeviationFrameID].Value else False
 
                     ## figure out correction point
-                    correctionStopFrame = getCorrectionLimit(selectedKeyFrame_dict, isDeviationPositive)
+                    #correctionStopFrame = getCorrectionLimit(selectedKeyFrame_dict, isDeviationPositive)
+
+                    gapStart = sortedSelectedKeysID_list[0]
+                    gapEnd = sortedSelectedKeysID_list[-1]
+                    slopes = extractSlope(animationNodes[axis].FCurve)
+                    correctionStopFrame = getCorrectionLimit2(slopes[gapStart: gapEnd]) + gapStart
+                    print correctionStopFrame
 
                     ## sift dictionary of the selected frames up to the correctionStopFrame
                     for i in range(correctionStopFrame + 1, sortedSelectedKeysID_list[-1] + 1):
@@ -293,8 +327,8 @@ def runTool(mode = 0):
                     y_gappedL = selectedKeyFrame_dict[x_gappedL]
                     y_gappedR = selectedKeyFrame_dict[x_gappedR]
 
-                    print x_gappedL, y_gappedL
-                    print x_gappedR, y_gappedR
+                    # print x_gappedL, y_gappedL
+                    # print x_gappedR, y_gappedR
 
                     ## get pre and post deviation values
                     ## NOTICE: provide a system to avoid to go beyond the last keyframe
@@ -305,21 +339,21 @@ def runTool(mode = 0):
                     y_postDeviation = animation_FCurveKeyList[x_postDeviation].Value
 
 
-                    print x_preDeviation, y_preDeviation
-                    print x_postDeviation, y_postDeviation
+                    # print x_preDeviation, y_preDeviation
+                    # print x_postDeviation, y_postDeviation
 
                     preSlope = extractSlope(animationNodes[axis].FCurve)[x_preDeviation-1]
                     postSlope = extractSlope(animationNodes[axis].FCurve)[x_postDeviation+1]
 
-                    print preSlope, postSlope
+                    # print preSlope, postSlope
 
                     preIntercept = y_preDeviation - (preSlope * x_preDeviation)
                     postIntercept = y_postDeviation - (postSlope * x_postDeviation)
-                    print preIntercept, postIntercept
+                    # print preIntercept, postIntercept
 
                     y_expectedL = (x_gappedL * preSlope) + preIntercept
                     y_expectedR = (x_gappedR * postSlope) + postIntercept
-                    print y_expectedL, y_expectedR
+                    # print y_expectedL, y_expectedR
 
                     y_deltaL = y_gappedL - y_expectedL
                     y_deltaR = y_gappedR - y_expectedR
@@ -327,12 +361,12 @@ def runTool(mode = 0):
                     for key in sortedSelectedKeysID_list:
                         preFactor = float((key - x_gappedL) - x_delta) / float(0-x_delta)
                         postFactor = float((key - x_gappedL) - 0) / float(x_delta-0)
-                        print "\nFACTOR CALCULATION"
-                        print preFactor, postFactor
+
+                        # print preFactor, postFactor
 
                         animation_FCurveKeyList[key].Value -= (y_deltaL * preFactor) + (y_deltaR * postFactor)
 
-                    print "\nEND ISHAN METHOD\n"
+
 
 
 

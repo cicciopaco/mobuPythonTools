@@ -5,16 +5,42 @@ from pyfbsdk import *
 from pyfbsdk_additions import *
 
 
+# def getSelectedKeyFrameDict(FBKeyList):
+#     """
+#     Extract from the FBFCurve provied a dictionary containing
+#     id and value per every key frame of the curve
+#     Parameters:
+#         FBPropertyListFCurveKey
+#
+#     Returns
+#         Dictionary {keyFrameId: keyFrameValue, ...}
+#
+#     """
+#     if not FBKeyList:
+#         return {}
+#
+#     selectedKeyFramesDict = {}
+#     allKeyFrameDict = {}
+#     for i in range(len(FBKeyList)):
+#         allKeyFrameDict[i] = FBKeyList[i].Value
+#         if FBKeyList[i].Selected:
+#             selectedKeyFramesDict[i] = FBKeyList[i].Value
+#
+#     if not selectedKeyFramesDict:
+#         return allKeyFrameDict
+#
+#     return selectedKeyFramesDict
+
+
 def getSelectedKeyFrameDict(FBKeyList):
     """
     Extract from the FBFCurve provied a dictionary containing
     id and value per every key frame of the curve
     Parameters:
         FBPropertyListFCurveKey
-    
+
     Returns
         Dictionary {keyFrameId: keyFrameValue, ...}
-
     """
     if not FBKeyList:
         return
@@ -22,9 +48,8 @@ def getSelectedKeyFrameDict(FBKeyList):
     for i in range(len(FBKeyList)):
         if FBKeyList[i].Selected:
             keyFramesDict[i] = FBKeyList[i].Value
-            
-    return keyFramesDict
 
+    return keyFramesDict
 
 def getCorrectionLimit(selectedKeyFrameDict, isPositiveDeviated):
     """
@@ -67,18 +92,25 @@ def getCorrectionLimit(selectedKeyFrameDict, isPositiveDeviated):
 
 
 def getCorrectionLimit2(selectionSlopesList):
+    """
+    Returns the frame where the slope of the animation curve changes sign
 
 
-    isTrendPositive = True if selectionSlopesList[0] >= 0.0 else False
-    frameLimit = 0
+    :param selectionSlopesList:
+    :return:
+    """
+
+
+    isTrendPositive = True if selectionSlopesList[1] >= 0.0 else False
+    frameLimit = None
 
     if isTrendPositive:
-        for i in range(1, len(selectionSlopesList)-1):
+        for i in range(2, len(selectionSlopesList)-1):
             if selectionSlopesList[i] < 0.0: return frameLimit
             else: frameLimit = i
 
     else:
-        for i in range(1, len(selectionSlopesList)-1):
+        for i in range(2, len(selectionSlopesList)-1):
             print frameLimit
             if selectionSlopesList[i] > 0.0: return frameLimit
             else: frameLimit = i
@@ -150,6 +182,7 @@ def normalizeDeviation(selectedFrames_dict, referenceFrameID):
     selectionMaxVal = referenceFrameValue
 
     print selectionMinVal, selectionMaxVal
+    print "here"
     
     
     selectedFramesNormValue_dict = {}
@@ -218,7 +251,9 @@ def extractSpikes(fCurve, deviationFactor = 1.0, onSelection=False):
     for slope in slopesCollection:
         deviationThreshold += abs(slope)
     deviationThreshold /= len(slopesCollection)
+    print deviationThreshold
     deviationThreshold *= deviationFactor
+
 
 
     for i, slope in enumerate(slopesCollection):
@@ -253,7 +288,7 @@ def runTool(mode = 0):
         del undoManager
     except:
         pass
-        
+
     selectedCtrls = FBModelList()
     FBGetSelectedModels(selectedCtrls, None, True, True)
     
@@ -271,46 +306,86 @@ def runTool(mode = 0):
         for channel in animationChannels:
             exec "animationNodes = control.{0}.GetAnimationNode().Nodes".format(channel)
             for axis in range(3):
+                print channel, axis
                 animation_FCurveKeyList = animationNodes[axis].FCurve.Keys
                 selectedKeyFrame_dict = getSelectedKeyFrameDict(animation_FCurveKeyList)
                 if len(selectedKeyFrame_dict) < 2: continue
-                
-                sortedSelectedKeysID_list = sorted(selectedKeyFrame_dict) 
+
+                sortedSelectedKeysID_list = sorted(selectedKeyFrame_dict)
+                deviationStart = sortedSelectedKeysID_list[0]
+                deviationEnd = sortedSelectedKeysID_list[-1]
+
+                print deviationStart, deviationEnd
+                siftedSelectedKeyFrame_dict = {}
+
+                # ## find out deviation within selection
+                # allDeviation = extractSpikes(animationNodes[axis].FCurve, 4)
+                # sortedSelectedKeysID_list = sorted(selectedKeyFrame_dict)
+                #
+                # siftedSelectedKeyFrame_dict = {}
+                #
+                # print len(allDeviation)
+                # print allDeviation
+                #
+                #
+                # for i in range(len(allDeviation)/2):
+                #     print "iteration {0}".format(i)
+                #     deviationStart = None
+                #     deviationEnd = None
+                #
+                #     if not allDeviation[i*2] in sortedSelectedKeysID_list: continue
+                #
+                #     else:
+                #         deviationStart = allDeviation[i*2]
+                #         deviationEnd = allDeviation[(i*2)+1] if allDeviation[(i*2)+1] in sortedSelectedKeysID_list else sortedSelectedKeysID_list[-1]
+                #
+                #         if (deviationEnd - deviationStart) <= 2:
+                #             print "spike detected. I will skip correction"
+                #             continue
+                #
+                #     print deviationStart, deviationEnd
 
                 if mode == 1:
 
                     ## evaluate deviation sign
-                    firstFrameID = sortedSelectedKeysID_list[0]
+                    firstFrameID = deviationStart
                     predeviationFrameID = firstFrameID - 1
 
                     isDeviationPositive = True if animation_FCurveKeyList[firstFrameID].Value > animation_FCurveKeyList[predeviationFrameID].Value else False
 
-                    ## figure out correction point
-                    #correctionStopFrame = getCorrectionLimit(selectedKeyFrame_dict, isDeviationPositive)
 
-                    gapStart = sortedSelectedKeysID_list[0]
-                    gapEnd = sortedSelectedKeysID_list[-1]
+
                     slopes = extractSlope(animationNodes[axis].FCurve)
-                    correctionStopFrame = getCorrectionLimit2(slopes[gapStart: gapEnd]) + gapStart
+                    print slopes[deviationStart-1: deviationEnd]
+                    correctionStopFrame = getCorrectionLimit2(slopes[deviationStart-1: deviationEnd]) + deviationStart
                     print correctionStopFrame
 
                     ## sift dictionary of the selected frames up to the correctionStopFrame
-                    for i in range(correctionStopFrame + 1, sortedSelectedKeysID_list[-1] + 1):
-                        selectedKeyFrame_dict.pop(i)
+                    for j in range(deviationStart, correctionStopFrame+1):
+                        siftedSelectedKeyFrame_dict[j] = selectedKeyFrame_dict[j]
+
+                    print siftedSelectedKeyFrame_dict
+
+
+                    # ## figure out correction point
+                    # correctionStopFrame = getCorrectionLimit(selectedKeyFrame_dict, isDeviationPositive)
+                    #
+                    # for i in range(correctionStopFrame + 1, sortedSelectedKeysID_list[-1] + 1):
+                    #     selectedKeyFrame_dict.pop(i)
 
 
                 ## calculate deviation
-                deltaDeviation = getBeginDeviationDelta(animation_FCurveKeyList, sortedSelectedKeysID_list[0])
+                deltaDeviation = getBeginDeviationDelta(animation_FCurveKeyList, deviationStart)
 
 
 
                 if mode == 1 or mode == 2:
 
                     ## normalize the selection
-                    normalizedDeviation_dict = normalizeDeviation(selectedKeyFrame_dict, sortedSelectedKeysID_list[0])
+                    normalizedDeviation_dict = normalizeDeviation(siftedSelectedKeyFrame_dict, deviationStart)
 
                     ## perform offset
-                    offsetDeviation(animation_FCurveKeyList, selectedKeyFrame_dict, deltaDeviation, normalizedDeviation_dict)
+                    offsetDeviation(animation_FCurveKeyList, siftedSelectedKeyFrame_dict, deltaDeviation, normalizedDeviation_dict)
 
                 elif mode == 0:
                     offsetDeviation(animation_FCurveKeyList, selectedKeyFrame_dict, deltaDeviation)
@@ -327,8 +402,8 @@ def runTool(mode = 0):
                     y_gappedL = selectedKeyFrame_dict[x_gappedL]
                     y_gappedR = selectedKeyFrame_dict[x_gappedR]
 
-                    # print x_gappedL, y_gappedL
-                    # print x_gappedR, y_gappedR
+                    print x_gappedL, y_gappedL
+                    print x_gappedR, y_gappedR
 
                     ## get pre and post deviation values
                     ## NOTICE: provide a system to avoid to go beyond the last keyframe
@@ -395,6 +470,18 @@ def PopulateTool(t):
     t.AddRegion("DoIt","DoIt", x, y, w, h)
     lyt = FBVBoxLayout()
     t.SetControl("DoIt",lyt)
+
+    thresholdLbl = FBLabel()
+    thresholdLbl.Caption = "Correction Threshold"
+    thresholdLbl.Justify = FBTextJustify.kFBTextJustifyCenter
+    lyt.AddRelative(thresholdLbl,10)
+
+
+    # thresholdEdb = FBEdit()
+    # thresholdEdb.Text = "0.0"
+    # thresholdEdb.Justify = FBTextJustify.kFBTextJustifyCenter
+    # lyt.AddRelative(thresholdEdb,20)
+
     
 
     offsetBtn = FBButton()
@@ -409,14 +496,14 @@ def PopulateTool(t):
     lyt.AddRelative(closetApexBtn,60)
     closetApexBtn.OnClick.Add(closetApexCB)
     
-    wholeSelectionBtn = FBButton()
-    wholeSelectionBtn.Caption = "Whole Selection"
-    wholeSelectionBtn.Justify = FBTextJustify.kFBTextJustifyCenter
-    lyt.AddRelative(wholeSelectionBtn,60)
-    wholeSelectionBtn.OnClick.Add(wholeSelectionCB)
+    # wholeSelectionBtn = FBButton()
+    # wholeSelectionBtn.Caption = "Whole Selection"
+    # wholeSelectionBtn.Justify = FBTextJustify.kFBTextJustifyCenter
+    # lyt.AddRelative(wholeSelectionBtn,60)
+    # wholeSelectionBtn.OnClick.Add(wholeSelectionCB)
     
     ishanBtn = FBButton()
-    ishanBtn.Caption = "ishan method"
+    ishanBtn.Caption = "Whole selection"
     ishanBtn.Justify = FBTextJustify.kFBTextJustifyCenter
     lyt.AddRelative(ishanBtn,60)
     ishanBtn.OnClick.Add(ishanCB)
